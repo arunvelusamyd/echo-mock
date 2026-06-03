@@ -9,6 +9,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -77,6 +78,53 @@ class MockControllerTest {
     void returns404WhenNoMockMatches() throws Exception {
         mvc.perform(get("/no/such/endpoint"))
                 .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("NO_MOCK_MATCHED"))
+                .andExpect(jsonPath("$.method").value("GET"));
+    }
+
+    @Test
+    void rejectsUnsupportedCurrency() throws Exception {
+        mvc.perform(post("/api/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"transactionId\":\"TXN-CUR\",\"amount\":100,\"currency\":\"USD\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.reason").value("UNSUPPORTED_CURRENCY"))
+                .andExpect(jsonPath("$.currency").value("USD"));
+    }
+
+    @Test
+    void statusEndpointUsesQueryDefaultsWhenHeaderAndParamsAbsent() throws Exception {
+        mvc.perform(get("/api/transactions/TXN-Q/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.transactionId").value("TXN-Q"))
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
+    }
+
+    @Test
+    void statusEndpointReflectsQueryTrackingIdAndStatus() throws Exception {
+        mvc.perform(get("/api/transactions/TXN-Q2/status")
+                        .param("trackingId", "TRK-FROM-QUERY")
+                        .param("status", "PENDING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.trackingId").value("TRK-FROM-QUERY"))
+                .andExpect(jsonPath("$.status").value("PENDING"));
+    }
+
+    @Test
+    void methodMismatchOnKnownPathReturns404() throws Exception {
+        // /api/payments is configured for POST only; a GET should not match.
+        mvc.perform(get("/api/payments"))
+                .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("NO_MOCK_MATCHED"));
+    }
+
+    @Test
+    void echoesTrackingIdHeaderBackInResponseHeaders() throws Exception {
+        mvc.perform(post("/api/transactions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Tracking-Id", "TRK-HDR")
+                        .content("{\"transactionId\":\"TXN-H\"}"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Tracking-Id", "TRK-HDR"));
     }
 }
