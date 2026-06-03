@@ -6,7 +6,6 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
@@ -18,13 +17,14 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Loads mock definitions from a YAML file. Resolution order:
- * <ol>
- *   <li>External file at {@code mock.config-path} (so it can be edited without rebuilding)</li>
- *   <li>Classpath fallback {@code mocks.yml}</li>
- * </ol>
- * The loaded list is held in an {@link AtomicReference} so it can be hot-reloaded
- * at runtime via the admin endpoint.
+ * Loads mock definitions from the external YAML file at {@code mock.config-path}
+ * (default {@code ./config/mocks.yml}, override with {@code MOCK_CONFIG_PATH}). The
+ * file is not bundled in the WAR, so it is supplied per environment and can be
+ * edited without rebuilding. If the file is missing, startup fails with a clear,
+ * actionable error.
+ *
+ * <p>The loaded list is held in an {@link AtomicReference} so it can be hot-reloaded
+ * at runtime via the admin endpoint.</p>
  */
 @Component
 public class MockConfigLoader {
@@ -48,31 +48,29 @@ public class MockConfigLoader {
         return definitions.get();
     }
 
-    /** (Re)reads the config file and atomically swaps in the new definitions. */
+    /** (Re)reads the external config file and atomically swaps in the new definitions. */
     public synchronized List<MockDefinition> reload() {
-        try {
-            MockConfigFile parsed;
-            File external = new File(externalConfigPath);
-            if (external.isFile()) {
-                log.info("Loading mock config from external file: {}", external.getAbsolutePath());
-                try (InputStream in = Files.newInputStream(external.toPath())) {
-                    parsed = yaml.readValue(in, MockConfigFile.class);
-                }
-            } else {
-                log.info("External config '{}' not found, falling back to classpath mocks.yml",
-                        external.getAbsolutePath());
-                try (InputStream in = new ClassPathResource("mocks.yml").getInputStream()) {
-                    parsed = yaml.readValue(in, MockConfigFile.class);
-                }
-            }
+        File external = new File(externalConfigPath);
+        if (!external.isFile()) {
+            String msg = "Mock config file not found at '" + external.getAbsolutePath()
+                    + "'. Provide it via the MOCK_CONFIG_PATH env var (or mount it there); "
+                    + "it is intentionally not bundled in the WAR.";
+            log.error(msg);
+            throw new IllegalStateException(msg);
+        }
+        try (InputStream in = Files.newInputStream(external.toPath())) {
+            log.info("Loading mock config from external file: {}", external.getAbsolutePath());
+            MockConfigFile parsed = yaml.readValue(in, MockConfigFile.class);
             List<MockDefinition> mocks = parsed.getMocks() == null
                     ? Collections.emptyList() : parsed.getMocks();
             definitions.set(mocks);
             log.info("Loaded {} mock definition(s)", mocks.size());
             return mocks;
+        } catch (IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("Failed to load mock config: {}", e.getMessage(), e);
-            throw new IllegalStateException("Unable to load mock config", e);
+            log.error("Failed to parse mock config '{}': {}", externalConfigPath, e.getMessage(), e);
+            throw new IllegalStateException("Unable to load mock config from " + externalConfigPath, e);
         }
     }
 

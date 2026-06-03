@@ -21,12 +21,12 @@ class MockConfigLoaderTest {
     }
 
     @Test
-    void fallsBackToClasspathWhenExternalFileMissing() {
+    void throwsClearErrorWhenExternalFileMissing() {
         MockConfigLoader loader = loaderWithPath("does/not/exist.yml");
-        List<MockDefinition> defs = loader.reload();
-        // The bundled classpath mocks.yml ships 3 definitions.
-        assertThat(defs).hasSize(3);
-        assertThat(loader.getDefinitions()).hasSize(3);
+        // Config is intentionally not bundled in the WAR, so a missing file fails fast.
+        assertThatThrownBy(loader::reload)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("MOCK_CONFIG_PATH");
     }
 
     @Test
