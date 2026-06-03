@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo-mock
+  namespace: echo-mock
+  labels:
+    app.kubernetes.io/name: echo-mock
+spec:
+  # 2 replicas for availability. NOTE: POST /__admin/reload only reloads the pod
+  # that receives it; to apply a ConfigMap change to ALL pods, edit the ConfigMap
+  # then `kubectl -n echo-mock rollout restart deployment/echo-mock`.
+  # (Set replicas: 1 if you prefer to rely on the per-pod reload endpoint.)
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: echo-mock
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: echo-mock
+    spec:
+      # The mock never calls the Kubernetes API — don't mount its SA token.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: echo-mock
+          # On-prem registry placeholder — replace with your registry path.
+          image: your-registry.example.com/echo-mock:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: MOCK_PORT
+              value: "8080"
+            - name: MOCK_CONFIG_PATH
+              value: /etc/echo-mock/mocks.yml
+          # Spring Boot/JVM needs a writable temp dir when the root FS is read-only.
+          volumeMounts:
+            - name: mock-config
+              mountPath: /etc/echo-mock
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          startupProbe:
+            httpGet:
+              path: /__admin/health
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30   # ~60s grace for JVM warm-up
+          readinessProbe:
+            httpGet:
+              path: /__admin/health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /__admin/health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+              ephemeral-storage: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+              ephemeral-storage: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: mock-config
+          configMap:
+            name: echo-mock-config
+        - name: tmp
+          emptyDir: {}

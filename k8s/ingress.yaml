@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: echo-mock
+  namespace: echo-mock
+  labels:
+    app.kubernetes.io/name: echo-mock
+  # Add controller-specific annotations here if needed, e.g. for nginx:
+  #   nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  # Replace with the IngressClass your cluster's controller uses (nginx, traefik, ...).
+  ingressClassName: nginx
+  rules:
+    # External access for manual testing / editing scenarios. The in-cluster API
+    # does NOT use this — it talks to the ClusterIP Service directly.
+    - host: echo-mock.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: echo-mock
+                port:
+                  number: 8080
