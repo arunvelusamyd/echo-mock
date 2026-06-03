@@ -1,0 +1,21 @@
+server:
+  port: ${MOCK_PORT:8080}
+
+spring:
+  application:
+    name: echo-mock
+  # Let the catch-all controller own every path (incl. "/").
+  web:
+    resources:
+      add-mappings: false
+  mvc:
+    throw-exception-if-no-handler-found: true
+
+mock:
+  # Path to the external mock definitions file. Defaults to ./config/mocks.yml
+  # (relative to the working directory); override with MOCK_CONFIG_PATH.
+  config-path: ${MOCK_CONFIG_PATH:config/mocks.yml}
+
+logging:
+  level:
+    com.example.echomock: INFO
