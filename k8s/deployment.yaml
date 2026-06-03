@@ -38,6 +38,9 @@ spec:
               value: "8080"
             - name: MOCK_CONFIG_PATH
               value: /etc/echo-mock/mocks.yml
+            # application.yml is not bundled in the WAR — load it from the mounted ConfigMap.
+            - name: SPRING_CONFIG_ADDITIONAL_LOCATION
+              value: optional:file:/etc/echo-mock/
           # Spring Boot/JVM needs a writable temp dir when the root FS is read-only.
           volumeMounts:
             - name: mock-config

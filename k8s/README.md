@@ -9,7 +9,7 @@ optional `Ingress` for external testing.
 | File             | Purpose                                                          |
 |------------------|------------------------------------------------------------------|
 | `namespace.yaml` | Namespace `echo-mock`                                            |
-| `configmap.yaml` | `mocks.yml` scenarios — **edit this to change mock behaviour**   |
+| `configmap.yaml` | `application.yml` + `mocks.yml` (neither is bundled in the WAR)  |
 | `deployment.yaml`| Deployment (2 replicas), probes, ConfigMap mount, hardened pod   |
 | `service.yaml`   | `ClusterIP echo-mock:8080` — the in-cluster address the API uses |
 | `ingress.yaml`   | External host → service (for manual testing)                    |
@@ -70,8 +70,11 @@ kubectl -n echo-mock rollout restart deployment/echo-mock
 
 - **Same namespace:** `http://echo-mock:8080`
 - **Other namespace:** `http://echo-mock.echo-mock.svc.cluster.local:8080`
-- Override the listen port with the `MOCK_PORT` env var; the external config path is
-  `MOCK_CONFIG_PATH=/etc/echo-mock/mocks.yml` (the mounted ConfigMap).
+- Config is **not** in the WAR. The ConfigMap supplies both `application.yml` and
+  `mocks.yml`, mounted at `/etc/echo-mock`. The Deployment sets
+  `SPRING_CONFIG_ADDITIONAL_LOCATION=optional:file:/etc/echo-mock/` (loads `application.yml`)
+  and `MOCK_CONFIG_PATH=/etc/echo-mock/mocks.yml` (the mock definitions). Override the
+  listen port with `MOCK_PORT`.
 - The pod runs non-root (uid 10001), read-only root filesystem with a writable
   `/tmp` emptyDir, and no service-account token mounted.
 

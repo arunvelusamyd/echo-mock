@@ -17,8 +17,8 @@ class AdminControllerTest {
     @BeforeEach
     void setUp() {
         MockConfigLoader loader = new MockConfigLoader();
-        // No external file -> classpath fallback (3 mocks).
-        ReflectionTestUtils.setField(loader, "externalConfigPath", "none.yml");
+        // Load the project's external config (3 bundled mock definitions).
+        ReflectionTestUtils.setField(loader, "externalConfigPath", "config/mocks.yml");
         loader.reload();
         controller = new AdminController(loader);
     }

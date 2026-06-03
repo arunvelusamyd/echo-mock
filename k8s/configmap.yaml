@@ -11,6 +11,24 @@ metadata:
 # (rollout restart reliably reloads every replica; the per-pod POST /__admin/reload
 #  endpoint only reloads the single pod that receives the call.)
 data:
+  # Spring Boot application config (NOT bundled in the WAR — supplied here).
+  application.yml: |
+    server:
+      port: ${MOCK_PORT:8080}
+    spring:
+      application:
+        name: echo-mock
+      web:
+        resources:
+          add-mappings: false
+      mvc:
+        throw-exception-if-no-handler-found: true
+    mock:
+      config-path: ${MOCK_CONFIG_PATH:/etc/echo-mock/mocks.yml}
+    logging:
+      level:
+        com.example.echomock: INFO
+
   mocks.yml: |
     # =========================================================================
     # Mock definitions. Each mock matches an incoming request (method + path)

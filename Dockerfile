@@ -26,6 +26,12 @@ COPY --from=build /build/target/echo-mock-*.war /app/app.war
 # Honour the container memory limit when sizing the heap.
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75"
 
+# Config is NOT baked into the WAR. Mount application.yml and mocks.yml at
+# /etc/echo-mock (e.g. a ConfigMap or a bind mount). Spring loads application.yml
+# from the additional location; the mock definitions come from MOCK_CONFIG_PATH.
+ENV SPRING_CONFIG_ADDITIONAL_LOCATION="optional:file:/etc/echo-mock/" \
+    MOCK_CONFIG_PATH="/etc/echo-mock/mocks.yml"
+
 EXPOSE 8080
 USER app
 

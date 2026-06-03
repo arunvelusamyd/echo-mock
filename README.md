@@ -39,17 +39,18 @@ mock definitions and answered accordingly.
 
 ### Run locally with Podman
 
-Builds the image and runs it the same way the Kubernetes pod does (non-root, read-only
-root filesystem, external config mounted from `./config`).
+The WAR ships **without** `application.yml` or `mocks.yml` — both are supplied externally.
+The image expects them mounted at `/etc/echo-mock` (the image presets
+`SPRING_CONFIG_ADDITIONAL_LOCATION` and `MOCK_CONFIG_PATH` to point there). Runs the same
+way the Kubernetes pod does: non-root, read-only root filesystem.
 
 ```bash
 # build the image
 podman build -t echo-mock:1.0.0 .
 
-# run it (mounts ./config as the editable mock config)
+# run it (mounts ./config, which holds application.yml + mocks.yml)
 podman run -d --name echo-mock \
   -p 8080:8080 --user 10001:10001 --read-only --tmpfs /tmp \
-  -e MOCK_CONFIG_PATH=/etc/echo-mock/mocks.yml \
   -v "$PWD/config":/etc/echo-mock:ro,Z \
   echo-mock:1.0.0
 
@@ -58,6 +59,7 @@ curl localhost:8080/__admin/health        # {"status":"UP","mocks":3}
 
 - The `:ro,Z` on the volume is for SELinux relabeling inside Podman's Linux VM (harmless elsewhere).
 - **macOS first-time only:** Podman runs in a VM — if `podman info` fails, run `podman machine init --now` once.
+- If you run without mounting config, the app **fails fast** with a clear error — config is intentionally not baked in.
 - Edit `config/mocks.yml`, then `curl -X POST localhost:8080/__admin/reload` to apply changes (reliable here since it's a single container).
 
 ```bash
@@ -102,9 +104,9 @@ that's the `${header.X-Tracking-Id:-${body.trackingId}}` template in the config.
 
 ## How to customize responses
 
-Edit **`config/mocks.yml`** (the external, editable file). It is reloaded on
-`POST /__admin/reload` — no restart. The bundled `src/main/resources/mocks.yml` is
-only a fallback used when the external file is missing.
+Edit **`config/mocks.yml`** (the external file — it is **not** packaged in the WAR).
+It is reloaded on `POST /__admin/reload` — no restart. If the file is missing at the
+configured path, the app fails fast with a clear error.
 
 A definition matches a request by **method + path**, then returns the **first**
 response whose `when` conditions all match. A response with no `when` is the default.
@@ -184,12 +186,19 @@ method and path, so missing mappings are obvious during testing.
 
 ---
 
-## Config file resolution
+## Config — externalized, not packaged
 
-1. External file at `mock.config-path` (default `config/mocks.yml`) — edit this.
-2. Classpath `mocks.yml` — bundled fallback.
+Neither `application.yml` nor `mocks.yml` is bundled in the WAR. Both are supplied at
+runtime so each environment owns its own config:
 
-Override the path: `--mock.config-path=/some/where/mocks.yml` or env `MOCK_CONFIG_PATH`.
+- **`application.yml`** — Spring Boot loads it from a config location. Locally, `./config/`
+  is searched automatically (`mvn spring-boot:run` and `java -jar` from the project root
+  just work). In a container, the image sets `SPRING_CONFIG_ADDITIONAL_LOCATION=optional:file:/etc/echo-mock/`.
+- **`mocks.yml`** — read from `mock.config-path` (default `./config/mocks.yml`; the image
+  sets `MOCK_CONFIG_PATH=/etc/echo-mock/mocks.yml`). Override with `--mock.config-path=...`
+  or the `MOCK_CONFIG_PATH` env var. If absent, the app fails fast with a clear error.
+
+`src/test/resources/application.yml` mirrors these settings for tests only (never packaged).
 
 ---
 
@@ -197,11 +206,13 @@ Override the path: `--mock.config-path=/some/where/mocks.yml` or env `MOCK_CONFI
 
 ```
 echo-mock/
-├── config/mocks.yml                      # editable mock definitions (reloadable)
+├── config/                               # external runtime config (NOT in the WAR)
+│   ├── application.yml                    #   Spring Boot settings
+│   └── mocks.yml                          #   editable mock definitions (reloadable)
 ├── pom.xml
 ├── src/main/java/com/example/echomock/
 │   ├── EchoMockApplication.java
-│   ├── config/MockConfigLoader.java      # loads + hot-reloads the YAML
+│   ├── config/MockConfigLoader.java      # loads + hot-reloads mocks.yml
 │   ├── controller/MockController.java    # catch-all request matcher
 │   ├── controller/AdminController.java   # /__admin endpoints
 │   ├── engine/RequestContext.java        # extracts body/header/query/path values
@@ -209,6 +220,6 @@ echo-mock/
 │   ├── engine/ConditionEvaluator.java    # `when` matching
 │   ├── engine/PathMatcher.java           # {var} path matching
 │   └── engine/ResponseRenderer.java      # builds the HTTP response
-├── src/main/resources/mocks.yml          # classpath fallback config
-└── src/test/java/.../MockControllerTest.java
+├── src/test/resources/application.yml    # test-only config (never packaged)
+└── src/test/java/.../                    # unit + MockMvc tests
 ```

@@ -1,9 +1,8 @@
 # =============================================================================
-# Mock definitions (classpath fallback).
+# Mock definitions (external config — not bundled in the WAR).
 #
-# This file is the bundled default. For day-to-day customization, edit the
-# external file ./config/mocks.yml instead and call POST /__admin/reload — no
-# rebuild or restart needed.
+# This is THE mock config the service reads (via mock.config-path / MOCK_CONFIG_PATH).
+# Edit it and call POST /__admin/reload — no rebuild or restart needed.
 #
 # Each mock matches an incoming request (method + path) and returns the FIRST
 # response whose `when` conditions all match. A response with no `when` block is
