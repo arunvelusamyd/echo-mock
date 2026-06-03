@@ -1,0 +1,101 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: echo-mock-config
+  namespace: echo-mock
+  labels:
+    app.kubernetes.io/name: echo-mock
+# Edit the scenarios below, then:
+#   kubectl apply -f k8s/configmap.yaml
+#   kubectl -n echo-mock rollout restart deployment/echo-mock
+# (rollout restart reliably reloads every replica; the per-pod POST /__admin/reload
+#  endpoint only reloads the single pod that receives the call.)
+data:
+  mocks.yml: |
+    # =========================================================================
+    # Mock definitions. Each mock matches an incoming request (method + path)
+    # and returns the FIRST response whose `when` conditions all match. A
+    # response with no `when` block is the default/fallback for that endpoint.
+    #
+    # Template placeholders (usable in status, headers, body):
+    #   ${body.<field>}    value from the request JSON body (nested: body.payer.id)
+    #   ${header.<name>}   request header (case-insensitive)
+    #   ${query.<name>}    query-string parameter
+    #   ${path.<var>}      path variable from a {var} segment
+    #   ${uuid} ${now}     generated values
+    #   ${a:-b}            use a, falling back to b if a is absent
+    #
+    # `when` operators: exact | !=v | >n | <n | >=n | <=n | regex:... | exists | missing
+    # =========================================================================
+    mocks:
+
+      # Core use case: echo the tracking / transaction id back to the caller.
+      - name: create-transaction
+        request:
+          method: POST
+          path: /api/transactions
+        responses:
+          - status: "200"
+            headers:
+              X-Tracking-Id: "${header.X-Tracking-Id:-${body.trackingId}}"
+            body: |
+              {
+                "status": "SUCCESS",
+                "message": "Transaction accepted",
+                "transactionId": "${body.transactionId}",
+                "trackingId": "${header.X-Tracking-Id:-${body.trackingId}}",
+                "processedAt": "${now}",
+                "reference": "${uuid}"
+              }
+
+      # Conditional responses on the same endpoint; both branches echo the id.
+      - name: create-payment
+        request:
+          method: POST
+          path: /api/payments
+        responses:
+          - when:
+              body.amount: ">10000"
+            status: "422"
+            body: |
+              {
+                "status": "REJECTED",
+                "reason": "AMOUNT_EXCEEDS_LIMIT",
+                "transactionId": "${body.transactionId}",
+                "trackingId": "${header.X-Tracking-Id:-UNKNOWN}"
+              }
+          - when:
+              body.currency: "!=SGD"
+            status: "400"
+            body: |
+              {
+                "status": "REJECTED",
+                "reason": "UNSUPPORTED_CURRENCY",
+                "transactionId": "${body.transactionId}",
+                "currency": "${body.currency}"
+              }
+          - status: "201"
+            body: |
+              {
+                "status": "SUCCESS",
+                "transactionId": "${body.transactionId}",
+                "trackingId": "${header.X-Tracking-Id:-${body.trackingId}}",
+                "amount": "${body.amount}",
+                "currency": "${body.currency:-SGD}",
+                "paymentRef": "${uuid}"
+              }
+
+      # Path variable + header echo. GET /api/transactions/{id}/status
+      - name: get-transaction-status
+        request:
+          method: GET
+          path: /api/transactions/{id}/status
+        responses:
+          - status: "200"
+            body: |
+              {
+                "transactionId": "${path.id}",
+                "trackingId": "${header.X-Tracking-Id:-${query.trackingId}}",
+                "status": "${query.status:-COMPLETED}",
+                "checkedAt": "${now}"
+              }

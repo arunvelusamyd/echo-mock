@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-mock
+  namespace: echo-mock
+  labels:
+    app.kubernetes.io/name: echo-mock
+spec:
+  # Internal-only. The calling REST API reaches the mock at:
+  #   http://echo-mock:8080                              (same namespace)
+  #   http://echo-mock.echo-mock.svc.cluster.local:8080  (other namespaces)
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: echo-mock
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
