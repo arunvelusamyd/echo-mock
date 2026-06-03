@@ -20,8 +20,8 @@ WORKDIR /app
 RUN groupadd --system --gid 10001 app \
  && useradd --system --uid 10001 --gid app --no-create-home app
 
-# The repackaged Spring Boot fat jar (target/echo-mock-1.0.0.jar).
-COPY --from=build /build/target/echo-mock-*.jar /app/app.jar
+# The repackaged executable Spring Boot WAR (target/echo-mock-1.0.0.war).
+COPY --from=build /build/target/echo-mock-*.war /app/app.war
 
 # Honour the container memory limit when sizing the heap.
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75"
@@ -29,4 +29,4 @@ ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75"
 EXPOSE 8080
 USER app
 
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+ENTRYPOINT ["java", "-jar", "/app/app.war"]
