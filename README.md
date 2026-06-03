@@ -19,7 +19,7 @@ mvn clean verify
 # run (defaults to port 8080)
 mvn spring-boot:run
 #   or
-java -jar target/echo-mock-1.0.0.jar
+java -jar target/echo-mock-1.0.0.war   # executable WAR; also deployable to an external servlet container
 
 # change the port
 MOCK_PORT=9090 mvn spring-boot:run
@@ -36,6 +36,38 @@ curl localhost:8080/__admin/health      # {"status":"UP","mocks":3}
 Set your application's downstream base URL to `http://localhost:8080` (or whatever
 host/port you run this on). Every request your API makes is matched against the
 mock definitions and answered accordingly.
+
+### Run locally with Podman
+
+Builds the image and runs it the same way the Kubernetes pod does (non-root, read-only
+root filesystem, external config mounted from `./config`).
+
+```bash
+# build the image
+podman build -t echo-mock:1.0.0 .
+
+# run it (mounts ./config as the editable mock config)
+podman run -d --name echo-mock \
+  -p 8080:8080 --user 10001:10001 --read-only --tmpfs /tmp \
+  -e MOCK_CONFIG_PATH=/etc/echo-mock/mocks.yml \
+  -v "$PWD/config":/etc/echo-mock:ro,Z \
+  echo-mock:1.0.0
+
+curl localhost:8080/__admin/health        # {"status":"UP","mocks":3}
+```
+
+- The `:ro,Z` on the volume is for SELinux relabeling inside Podman's Linux VM (harmless elsewhere).
+- **macOS first-time only:** Podman runs in a VM — if `podman info` fails, run `podman machine init --now` once.
+- Edit `config/mocks.yml`, then `curl -X POST localhost:8080/__admin/reload` to apply changes (reliable here since it's a single container).
+
+```bash
+podman logs -f echo-mock      # follow logs
+podman stop echo-mock         # stop
+podman rm -f echo-mock        # remove
+```
+
+> Docker works with the identical commands (`docker` in place of `podman`); the `Z`
+> volume flag is simply ignored by Docker.
 
 ---
 

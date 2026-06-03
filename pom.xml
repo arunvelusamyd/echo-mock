@@ -14,6 +14,7 @@
     <groupId>com.example</groupId>
     <artifactId>echo-mock</artifactId>
     <version>1.0.0</version>
+    <packaging>war</packaging>
     <name>echo-mock</name>
     <description>Config-driven mock REST service that echoes tracking/transaction ids for end-to-end testing</description>
 
@@ -38,6 +39,15 @@
             <groupId>com.jayway.jsonpath</groupId>
             <artifactId>json-path</artifactId>
             <version>2.9.0</version>
+        </dependency>
+
+        <!-- Embedded Tomcat as 'provided': stays runnable via `java -jar app.war`
+             (Spring Boot puts it in WEB-INF/lib-provided), but is excluded when the
+             WAR is dropped into an external servlet container, avoiding a duplicate. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-tomcat</artifactId>
+            <scope>provided</scope>
         </dependency>
 
         <dependency>
